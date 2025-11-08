@@ -2,664 +2,915 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
-    <title>Unified Messenger</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YFBGram Chat</title>
     <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* Общие стили для удобства (UX/UI) */
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* Основной контейнер чата */
+        #chat-container {
+            display: none; /* Скрыт до авторизации */
+            width: 95vw;
+            height: 95vh;
+            max-width: 1200px;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .chat-layout {
+            display: flex;
+            height: 100%;
+        }
+
+        /* Список пользователей */
+        #user-list {
+            width: 300px;
+            background-color: #ffffff;
+            border-right: 1px solid #e5e7eb;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid #f0f2f5;
+            transition: background-color 0.2s;
+            position: relative; /* Для счетчика */
+        }
+
+        .user-item:hover, .user-item.active {
+            background-color: #e6f7ff;
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 12px;
+            border: 2px solid transparent;
+        }
+
+        .user-name {
+            font-weight: 500;
+            font-size: 16px;
+            flex-grow: 1;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: gray;
+            margin-left: auto;
+            border: 2px solid white;
+        }
+
+        .status-online {
+            background-color: #4cd964;
+        }
+
+        /* Счетчик новых сообщений */
+        .unread-count {
+            position: absolute;
+            top: 50%;
+            right: 15px;
+            transform: translateY(-50%);
+            background-color: #007bff;
+            color: white;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        /* Чат-окно */
+        #chat-window {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            background-color: #f7f7f7;
+        }
+
+        #chat-messages {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+
+        .message-container {
+            display: flex;
+            margin-bottom: 15px;
+            align-items: flex-end;
+        }
+
+        .message-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 10px;
+        }
+
+        .message-bubble {
+            max-width: 60%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .my-message {
+            margin-left: auto;
+            background-color: #007bff;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .their-message {
+            margin-right: auto;
+            background-color: #e5e7eb;
+            color: #1c1e21;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-timestamp {
+            font-size: 10px;
+            margin-top: 5px;
+            opacity: 0.6;
+            display: block;
+            text-align: right;
+        }
+
+        /* Галочки прочтения */
+        .read-status-icon {
+            font-size: 12px;
+            margin-left: 5px;
+            color: #88bbff; /* Синий цвет для прочитано */
+        }
+        
+        .message-text {
+            white-space: pre-wrap;
+        }
+
+        /* Медиа сообщения */
+        .message-bubble img, .message-bubble video, .message-bubble audio {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 8px;
+            margin: 5px 0;
+        }
+
+        /* Ввод сообщений */
+        #message-input-area {
+            display: flex;
+            padding: 15px;
+            border-top: 1px solid #e5e7eb;
+            background-color: #ffffff;
+            align-items: center;
+        }
+
+        #message-input {
+            flex-grow: 1;
+            padding: 10px 15px;
+            border: 1px solid #e5e7eb;
+            border-radius: 25px;
+            margin-right: 10px;
+            font-size: 16px;
+            resize: none;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        #send-button, #file-button, #voice-record-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            margin-left: 5px;
+            cursor: pointer;
+            font-size: 20px;
+            transition: background-color 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #send-button:hover, #file-button:hover, #voice-record-btn:hover {
+            background-color: #0056b3;
+        }
+
+        /* Стиль для индикатора печати */
+        #typing-indicator {
+            height: 20px;
+            font-style: italic;
+            color: #555;
+            padding: 0 15px;
+        }
+
+        /* --- LOGIN FORM --- */
+        #login-form-container {
+            width: 400px;
+            padding: 30px;
+            background: white;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        #login-form-container h2 {
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+
+        #login-form input[type="text"], #login-form input[type="password"] {
+            width: calc(100% - 30px);
+            padding: 12px 15px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        #login-form button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #login-form button:hover {
+            background-color: #0056b3;
+        }
+
+        .error-message {
+            color: red;
+            margin-top: 10px;
+        }
+        
+        /* Адаптивность для мобильных устройств */
+        @media (max-width: 768px) {
+            #chat-container {
+                width: 100vw;
+                height: 100vh;
+                border-radius: 0;
+            }
+            #user-list {
+                width: 100%;
+                position: absolute;
+                z-index: 10;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                border-right: none;
+            }
+            #user-list.visible {
+                transform: translateX(0);
+            }
+            .chat-layout {
+                flex-direction: column;
+            }
+            #chat-window {
+                width: 100%;
+            }
+            #chat-header {
+                justify-content: space-between;
+            }
+            .user-item {
+                padding: 15px 10px;
+            }
+        }
+    </style>
 </head>
 <body>
 
-    <div id="login-screen" class="screen active">
-        <h1>Добро пожаловать</h1>
-        <h2>Войти в Чат</h2>
-        <div class="login-form">
-            <label for="username-input">Имя пользователя:</label>
-            <input type="text" id="username-input" placeholder="Введите имя">
-
-            <label for="password-input">Пароль:</label>
-            <input type="password" id="password-input" placeholder="Введите пароль">
-            
-            <button id="login-button">Войти</button>
+    <div id="login-form-container">
+        <h2>Войдите в YFBGram</h2>
+        <form id="login-form">
+            <input type="text" id="username" placeholder="Имя пользователя (Yahyo, Fedya, Boyka)" required>
+            <input type="password" id="password" placeholder="Пароль" required>
+            <button type="submit">Войти</button>
             <p id="login-error" class="error-message"></p>
-        </div>
+        </form>
     </div>
 
-    <div id="chat-screen" class="screen">
-        <div id="sidebar">
-            <div id="user-info">
-                <img id="current-user-avatar" class="avatar" src="" alt="Мой аватар">
-                <span id="current-user-name"></span>
-                <button id="profile-settings-button" title="Настройки Профиля">⚙️</button>
-                <button id="theme-toggle" title="Сменить Тему">☀️</button>
-            </div>
+    <div id="chat-container">
+        <div class="chat-layout">
             
-            <div class="search-area">
-                 <button id="search-button" title="Поиск">🔍</button>
-                 <input type="text" id="search-input" placeholder="Поиск в чате...">
-            </div>
-
-            <div id="contact-list">
-                <h2>Контакты</h2>
+            <div id="user-list">
+                <div id="my-profile" class="user-item" style="cursor: default; background-color: #f0f0f0;">
+                    <img id="my-avatar" class="user-avatar" src="/avatars/default.jpg" alt="Мой аватар">
+                    <span id="my-username" class="user-name"></span>
+                    <button id="edit-profile-btn" style="background: none; border: none; cursor: pointer; font-size: 18px;">⚙️</button>
                 </div>
-        </div>
-        
-        <div id="main-chat">
-            <div id="chat-header">
-                <button id="back-button">←</button>
-                <img id="recipient-avatar" class="avatar" src="" alt="Аватар собеседника">
-                <div class="header-name-status">
-                    <span id="recipient-name">Выберите собеседника</span>
-                    <span id="typing-indicator" class="status-offline-text">Offline</span>
-                </div>
-            </div>
-
-            <div id="messages-container">
-                </div>
-
-            <div id="message-input-area" style="display: flex;">
-                <label id="file-label" for="file-input" title="Прикрепить файл">📎</label>
-                <input type="file" id="file-input" style="display: none;">
                 
-                <button id="record-button" title="Записать голосовое сообщение">🎙️</button>
-
-                <input type="text" id="message-input" placeholder="Сообщение...">
-                <button id="send-button" disabled>Отправить</button>
+                <h4 style="padding: 0 15px; color: #555;">Чаты:</h4>
+                <div id="users-container">
+                    </div>
             </div>
 
-            <div id="voice-record-ui" style="display: none;">
-                <button id="cancel-record-button">×</button>
-                <span id="record-timer">00:00</span>
-                <audio id="audio-preview" controls></audio>
-                <button id="stop-record-button" style="display: none;">◼</button>
-                <button id="send-voice-button" disabled>Отправить</button>
-            </div>
-        </div>
-    </div>
+            <div id="chat-window">
+                <div id="chat-header">
+                    <button id="toggle-sidebar" style="display: none;">☰</button>
+                    <img id="recipient-avatar" class="user-avatar" src="/avatars/default.jpg" alt="Аватар собеседника">
+                    <span id="recipient-name" class="user-name" style="margin-left: 10px;">Выберите собеседника</span>
+                </div>
+                
+                <div id="chat-messages">
+                    </div>
+                
+                <div id="typing-indicator"></div>
 
-    <div id="profile-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button">&times;</span>
-            <h2>Настройки Профиля</h2>
-            <img id="modal-avatar-preview" class="avatar-large" src="" alt="Аватар">
-            <label id="change-avatar-button" class="button-like" for="avatar-file-input">Сменить Аватар</label>
-            <input type="file" id="avatar-file-input" style="display: none;" accept="image/*">
-            <label>Имя пользователя (Нельзя изменить):</label>
-            <input type="text" id="modal-username" readonly>
-            <button id="save-profile-button">Сохранить</button>
+                <div id="message-input-area">
+                    
+                    <button id="file-button" title="Прикрепить файл">📎</button>
+                    <input 
+                        type="file" 
+                        id="file-input" 
+                        style="display: none;" 
+                        accept="image/*, video/*, audio/*, .pdf, .doc, .docx" 
+                    /> 
+
+                    <textarea id="message-input" placeholder="Введите сообщение..."></textarea>
+                    
+                    <button id="voice-record-btn" title="Записать голосовое сообщение">🎙️</button>
+
+                    <button id="send-button" title="Отправить">➤</button>
+                </div>
+            </div>
         </div>
     </div>
     
-    <div id="edit-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button edit-close">&times;</span>
-            <h2>Редактировать Сообщение</h2>
-            <textarea id="edit-message-input" rows="4" style="width: 100%; padding: 10px;"></textarea>
-            <button id="save-edit-button">Сохранить</button>
+    <div id="edit-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100;">
+        <div style="background: white; width: 300px; margin: 100px auto; padding: 20px; border-radius: 10px;">
+            <h3>Редактирование</h3>
+            <textarea id="edit-message-input" style="width: 100%; height: 80px;"></textarea>
+            <button id="save-edit-btn">Сохранить</button>
+            <button id="cancel-edit-btn">Отмена</button>
         </div>
     </div>
 
-    <script>
-        // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
-        const socket = io();
-        let currentUsername = null;
-        let currentAvatar = null;
-        let currentRecipient = null;
-        let currentRoom = null;
-        let allUsers = [];
-        let allUsersAvatars = {};
-        let editingMessageId = null; // ID сообщения, которое редактируется
+<script>
+    const socket = io();
+    
+    // --- ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ---
+    let currentUser = null;
+    let currentUserAvatar = null;
+    let currentRecipient = null;
+    let currentRoom = null;
+    let allUsersAvatars = {};
+    let isTypingTimeout = null;
+    let unreadCounts = {}; // НОВОЕ: Объект для хранения счетчиков непрочитанных
+    let isRecording = false; // НОВОЕ: Флаг для записи голоса
+    let mediaRecorder; // НОВОЕ: Объект для записи голоса
+    let audioChunks = []; // НОВОЕ: Массив для хранения данных голоса
 
-        // --- ЭЛЕМЕНТЫ DOM ---
-        const loginScreen = document.getElementById('login-screen');
-        const chatScreen = document.getElementById('chat-screen');
-        const loginButton = document.getElementById('login-button');
-        const usernameInput = document.getElementById('username-input');
-        const passwordInput = document.getElementById('password-input');
-        const loginError = document.getElementById('login-error');
-        const contactList = document.getElementById('contact-list');
-        const messagesContainer = document.getElementById('messages-container');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        const typingIndicator = document.getElementById('typing-indicator');
-        const recipientName = document.getElementById('recipient-name');
-        const recipientAvatar = document.getElementById('recipient-avatar');
-        const currentUserAvatar = document.getElementById('current-user-avatar');
-        const currentUserNameSpan = document.getElementById('current-user-name');
+    // --- DOM ЭЛЕМЕНТЫ ---
+    const loginFormContainer = document.getElementById('login-form-container');
+    const chatContainer = document.getElementById('chat-container');
+    const loginForm = document.getElementById('login-form');
+    const usersContainer = document.getElementById('users-container');
+    const chatMessages = document.getElementById('chat-messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const fileButton = document.getElementById('file-button');
+    const fileInput = document.getElementById('file-input'); // ИСПРАВЛЕНО
+    const voiceRecordBtn = document.getElementById('voice-record-btn'); // НОВОЕ
+    const typingIndicator = document.getElementById('typing-indicator');
+    
+    // Элементы редактирования
+    const editModal = document.getElementById('edit-modal');
+    const editMessageInput = document.getElementById('edit-message-input');
+    const saveEditBtn = document.getElementById('save-edit-btn');
+    const cancelEditBtn = document.getElementById('cancel-edit-btn');
+    let editingMessageId = null;
+
+    // --- ФУНКЦИИ ИНТЕРФЕЙСА ---
+
+    function createRoomName(user1, user2) {
+        // Всегда возвращает комнату в алфавитном порядке (например, Boyka-Fedya)
+        return [user1, user2].sort().join('-');
+    }
+
+    function renderMessage(msg, currentUsername) {
+        // ... (Функция рендеринга сообщений, осталась та же) ...
+        const messageContainer = document.createElement('div');
+        messageContainer.className = `message-container ${msg.sender === currentUsername ? 'my-message-container' : 'their-message-container'}`;
+        messageContainer.dataset.messageId = msg.id;
+
+        const isMyMessage = msg.sender === currentUsername;
         
-        // Настройки
-        const themeToggle = document.getElementById('theme-toggle');
-        const profileSettingsButton = document.getElementById('profile-settings-button');
-        const profileModal = document.getElementById('profile-modal');
-        const modalAvatarPreview = document.getElementById('modal-avatar-preview');
-        const modalUsername = document.getElementById('modal-username');
-        const avatarFileInput = document.getElementById('avatar-file-input');
-        const saveProfileButton = document.getElementById('save-profile-button');
-        const closeButtons = document.querySelectorAll('.close-button');
-        
-        // Редактирование
-        const editModal = document.getElementById('edit-modal');
-        const editMessageInput = document.getElementById('edit-message-input');
-        const saveEditButton = document.getElementById('save-edit-button');
-        
-        // Поиск
-        const searchInput = document.getElementById('search-input');
-        const searchButton = document.getElementById('search-button');
-
-        // --- ФУНКЦИИ УТИЛИТЫ ---
-
-        function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
-            return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-        }
-        
-        function base64EncodeFile(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-        
-        // --- РЕНДЕРИНГ ЭЛЕМЕНТОВ ---
-
-        function createContactElement(username, isOnline, lastMessage) {
-            const contactItem = document.createElement('div');
-            contactItem.className = 'contact-item';
-            contactItem.setAttribute('data-username', username);
-            
-            const avatarUrl = allUsersAvatars[username] || '/avatars/default.jpg';
-
-            contactItem.innerHTML = `
-                <div class="contact-info">
-                    <img class="avatar" src="${avatarUrl}" alt="Аватар ${username}">
-                    <div>
-                        <strong>${username}</strong>
-                        <div class="last-message">${lastMessage || ''}</div>
-                    </div>
-                </div>
-                <span id="status-${username}" class="contact-status-text status-${isOnline ? 'online' : 'offline'}">${isOnline ? 'Online' : 'Offline'}</span>
-                <span class="unread-badge" style="display: none;">0</span>
-            `;
-
-            contactItem.addEventListener('click', () => selectRecipient(username));
-            return contactItem;
-        }
-        
-        function renderMessage(msg) {
-            const wrapper = document.createElement('div');
-            wrapper.className = `message-content-wrapper ${msg.sender === currentUsername ? 'sent' : 'received'}`;
-            wrapper.setAttribute('data-id', msg.id);
-
-            const avatarUrl = allUsersAvatars[msg.sender] || '/avatars/default.jpg';
-            
-            if (msg.sender !== currentUsername) {
-                const avatarImg = document.createElement('img');
-                avatarImg.className = 'avatar';
-                avatarImg.src = avatarUrl;
-                avatarImg.alt = `Аватар ${msg.sender}`;
-                wrapper.appendChild(avatarImg);
-            }
-
-            const bubble = document.createElement('div');
-            bubble.className = 'message-text-bubble';
-            
-            let contentHTML = '';
-
-            if (msg.type === 'voice') {
-                contentHTML = `
-                    <div class="voice-message-bubble">
-                        <audio controls src="${msg.url}"></audio>
-                    </div>
-                `;
-            } else if (msg.type === 'text') {
-                contentHTML = `<span class="message-text">${msg.text || 'Сообщение...'}</span>`;
-            } else if (msg.type && msg.url) {
-                const tag = msg.type.startsWith('image') ? 'img' : 'video';
-                contentHTML = `
-                    <div class="media-content">
-                        <${tag} src="${msg.url}" controls="${tag === 'video' ? 'true' : 'false'}"></${tag}>
-                        <span class="message-text">${msg.text || ''}</span>
-                    </div>
-                `;
-            }
-            
-            const timeStatusHTML = `
-                <div class="message-time-status">
-                    ${msg.edited ? '<span class="message-edited">(ред.)</span>' : ''}
-                    ${formatTimestamp(msg.timestamp)}
-                    ${msg.sender === currentUsername ? 
-                        `<span class="read-receipt ${msg.is_read ? 'is-read' : ''}">✓</span>` : ''}
-                </div>
-            `;
-            
-            bubble.innerHTML = contentHTML + timeStatusHTML;
-
-            if (msg.sender === currentUsername && msg.type === 'text') {
-                const menu = document.createElement('div');
-                menu.className = 'message-menu';
-                menu.innerHTML = `
-                    <button class="edit-btn" title="Редактировать" data-id="${msg.id}">✎</button>
-                    <button class="delete-btn" title="Удалить" data-id="${msg.id}">✖</button>
-                `;
-                bubble.appendChild(menu);
-            }
-            
-            wrapper.appendChild(bubble);
-
-            if (msg.sender === currentUsername) {
-                const avatarImg = document.createElement('img');
-                avatarImg.className = 'avatar';
-                avatarImg.src = avatarUrl;
-                avatarImg.alt = `Аватар ${msg.sender}`;
-                wrapper.appendChild(avatarImg);
-            }
-            
-            return wrapper;
+        // Создание аватара для чужих сообщений
+        if (!isMyMessage) {
+            const avatar = document.createElement('img');
+            avatar.className = 'message-avatar';
+            avatar.src = allUsersAvatars[msg.sender];
+            avatar.alt = msg.sender;
+            messageContainer.appendChild(avatar);
         }
 
-        function displayHistory(history) {
-            messagesContainer.innerHTML = '';
-            history.forEach(msg => messagesContainer.appendChild(renderMessage(msg)));
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        const bubble = document.createElement('div');
+        bubble.className = `message-bubble ${isMyMessage ? 'my-message' : 'their-message'}`;
+        bubble.dataset.sender = msg.sender;
 
-            if (history.length > 0) {
-                 const lastMessage = history[history.length - 1];
-                 const recipient = currentRoom.split('-').find(name => name !== currentUsername);
-                 
-                 if (lastMessage.sender !== currentUsername) {
-                     socket.emit('message read', { 
-                        roomName: currentRoom, 
-                        lastMessageId: lastMessage.id, 
-                        recipient: recipient 
-                    });
-                 }
-            }
+        // Контент
+        if (msg.type === 'image') {
+            const img = document.createElement('img');
+            img.src = msg.url;
+            img.alt = msg.text || 'Изображение';
+            bubble.appendChild(img);
+        } else if (msg.type === 'video') {
+            const video = document.createElement('video');
+            video.src = msg.url;
+            video.controls = true;
+            bubble.appendChild(video);
+        } else if (msg.type === 'audio' || msg.type === 'voice') { // Обработка голосового
+            const audio = document.createElement('audio');
+            audio.src = msg.url;
+            audio.controls = true;
+            bubble.appendChild(audio);
+        } else {
+            const textSpan = document.createElement('span');
+            textSpan.className = 'message-text';
+            textSpan.textContent = msg.text;
+            bubble.appendChild(textSpan);
         }
         
-        // --- ЛОГИКА ЧАТА ---
+        // Время и статус прочтения
+        const timestamp = document.createElement('span');
+        timestamp.className = 'message-timestamp';
+        timestamp.textContent = new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
-        function sendMessage() {
-            const text = messageInput.value.trim();
-            if (text === '' || !currentRecipient) return;
-
-            const msg = {
-                recipient: currentRecipient,
-                text: text
-            };
-
-            socket.emit('private message', msg);
-            
-            messageInput.value = ''; 
-            sendButton.disabled = true; 
+        if (isMyMessage) {
+            const readStatus = document.createElement('span');
+            readStatus.className = 'read-status-icon';
+            readStatus.innerHTML = msg.is_read ? '✓✓' : '✓'; // ✓✓ - прочитано, ✓ - отправлено
+            timestamp.appendChild(readStatus);
         }
 
-        function selectRecipient(username) {
-            if (currentRecipient === username) return;
+        bubble.appendChild(timestamp);
 
-            if (currentRecipient) {
-                const oldContact = document.querySelector(`.contact-item[data-username="${currentRecipient}"]`);
-                if (oldContact) oldContact.classList.remove('active');
-            }
-            const newContact = document.querySelector(`.contact-item[data-username="${username}"]`);
-            if (newContact) newContact.classList.add('active');
-
-            currentRecipient = username;
-            currentRoom = [currentUsername, currentRecipient].sort().join('-');
-
-            recipientName.textContent = username;
-            recipientAvatar.src = allUsersAvatars[username] || '/avatars/default.jpg';
-            typingIndicator.textContent = 'Offline'; 
-            typingIndicator.className = 'status-offline-text';
-            
-            const currentStatusElement = document.getElementById(`status-${username}`);
-            if (currentStatusElement) {
-                typingIndicator.textContent = currentStatusElement.textContent;
-                typingIndicator.className = currentStatusElement.className;
-            } else {
-                 typingIndicator.textContent = 'Offline';
-                 typingIndicator.className = 'status-offline-text';
-            }
-
-
-            messagesContainer.innerHTML = 'Загрузка истории...';
-            
-            socket.emit('join room', currentRoom);
-            
-            document.getElementById('search-input').value = '';
-        }
-
-        function renderContactList(initialStatuses) {
-            contactList.innerHTML = '<h2>Контакты</h2>';
-            allUsers.forEach(username => {
-                if (username !== currentUsername) {
-                    const isOnline = initialStatuses[username];
-                    contactList.appendChild(createContactElement(username, isOnline));
-                }
-            });
-        }
-        
-        // --- ЛОГИКА ТЕМЫ ---
-        function initTheme() {
-            const savedTheme = localStorage.getItem('theme');
-            if (savedTheme === 'dark') {
-                document.body.classList.add('dark-mode');
-                themeToggle.textContent = '🌙';
-            } else {
-                themeToggle.textContent = '☀️';
-            }
-        }
-
-        themeToggle.addEventListener('click', () => {
-            document.body.classList.toggle('dark-mode');
-            if (document.body.classList.contains('dark-mode')) {
-                localStorage.setItem('theme', 'dark');
-                themeToggle.textContent = '🌙';
-            } else {
-                localStorage.setItem('theme', 'light');
-                themeToggle.textContent = '☀️';
-            }
-        });
-
-        // --- ЛОГИКА НАСТРОЕК ПРОФИЛЯ ---
-        profileSettingsButton.addEventListener('click', () => {
-            modalUsername.value = currentUsername;
-            modalAvatarPreview.src = currentAvatar || '/avatars/default.jpg';
-            profileModal.classList.add('is-open');
-        });
-        
-        closeButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                profileModal.classList.remove('is-open');
-                editModal.classList.remove('is-open');
-            });
-        });
-
-        avatarFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    modalAvatarPreview.src = event.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-
-        saveProfileButton.addEventListener('click', async () => {
-            const file = avatarFileInput.files[0];
-            let newAvatar = currentAvatar;
-
-            if (file) {
-                newAvatar = await base64EncodeFile(file);
-            }
-
-            socket.emit('update profile', { 
-                newUsername: currentUsername, 
-                newAvatar: newAvatar, 
-                oldUsername: currentUsername 
-            }, (success, data) => {
-                if (success) {
-                    currentAvatar = data.updatedUser.avatar; 
-                    currentUserAvatar.src = currentAvatar; 
-                    profileModal.classList.remove('is-open');
-                    
-                    const initialStatuses = allUsers.reduce((acc, name) => {
-                        const statusSpan = document.getElementById(`status-${name}`);
-                        acc[name] = statusSpan ? statusSpan.className.includes('online') : false;
-                        return acc;
-                    }, {});
-                    renderContactList(initialStatuses);
-                    
-                } else {
-                    alert('Ошибка сохранения профиля: ' + data);
-                }
-            });
-        });
-        
-        // --- ЛОГИКА РЕДАКТИРОВАНИЯ/УДАЛЕНИЯ ---
-        messagesContainer.addEventListener('click', (e) => {
-            const target = e.target;
-            const messageElement = target.closest('.message-content-wrapper');
-            if (!messageElement) return;
-            
-            const messageId = parseInt(messageElement.getAttribute('data-id'));
-            
-            if (target.classList.contains('edit-btn')) {
-                const currentText = messageElement.querySelector('.message-text').textContent;
-                editingMessageId = messageId;
-                editMessageInput.value = currentText;
-                editModal.classList.add('is-open');
-            } else if (target.classList.contains('delete-btn')) {
-                if (confirm('Вы уверены, что хотите удалить это сообщение?')) {
-                    socket.emit('delete message', { messageId: messageId });
-                }
-            }
-        });
-
-        saveEditButton.addEventListener('click', () => {
-            const newText = editMessageInput.value.trim();
-            if (newText && editingMessageId) {
-                socket.emit('edit message', { 
-                    messageId: editingMessageId, 
-                    newText: newText, 
-                    recipient: currentRecipient 
-                });
-                editModal.classList.remove('is-open');
-                editingMessageId = null;
-            } else {
-                alert('Сообщение не может быть пустым.');
-            }
-        });
-        
-        // --- ЛОГИКА ПОИСКА ---
-        function performSearch() {
-            const query = searchInput.value.trim();
-            if (query && currentRoom) {
-                 messagesContainer.innerHTML = 'Поиск...';
-                 socket.emit('search history', query);
-            } else if (!query && currentRoom) {
-                 // Сброс поиска: просто перезагружаем историю
-                 socket.emit('join room', currentRoom);
-            }
-        }
-        
-        searchButton.addEventListener('click', performSearch);
-        
-        searchInput.addEventListener('keypress', (e) => {
-             if (e.key === 'Enter') {
-                performSearch();
-             }
-        });
-        
-        // --- ОБРАБОТЧИКИ СОБЫТИЙ DOM ---
-
-        loginButton.addEventListener('click', () => {
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
-            if (!username || !password) {
-                loginError.textContent = 'Введите имя пользователя и пароль.';
-                return;
-            }
-
-            loginError.textContent = '';
-            
-            socket.emit('login', username, password, (success, data) => {
-                if (success) {
-                    currentUsername = data.currentUser;
-                    currentAvatar = data.currentUserAvatar;
-                    allUsers = data.allUsers;
-                    allUsersAvatars = data.allUsersAvatars;
-
-                    loginScreen.classList.remove('active');
-                    chatScreen.classList.add('active');
-                    currentUserAvatar.src = currentAvatar;
-                    currentUserNameSpan.textContent = currentUsername;
-                    modalUsername.value = currentUsername;
-
-                    renderContactList(data.initialStatuses);
-                    
-                    // ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ: Автоматически выбираем первого собеседника
-                    if (allUsers.length > 1) {
-                         const firstRecipient = allUsers.find(name => name !== currentUsername);
-                         if (firstRecipient) {
-                              selectRecipient(firstRecipient);
-                         }
-                    }
-                    
-                } else {
-                    loginError.textContent = data;
-                }
-            });
-        });
-
-        messageInput.addEventListener('input', () => {
-            sendButton.disabled = messageInput.value.trim() === '';
-            
-            if (currentRecipient) {
-                const isTyping = messageInput.value.length > 0;
-                socket.emit('typing', { recipient: currentRecipient, isTyping: isTyping });
-            }
-        });
-
-        sendButton.addEventListener('click', sendMessage);
-        
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
+        // Контекстное меню для моих сообщений
+        if (isMyMessage) {
+             bubble.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
-                sendMessage();
-            }
-        });
-        
-        // --- СОКЕТЫ (ОБРАБОТЧИКИ СЕРВЕРА) ---
-
-        socket.on('private message', (msg) => {
-            if (msg.room === currentRoom) {
-                messagesContainer.appendChild(renderMessage(msg));
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                
-                 if (msg.recipient === currentUsername) {
-                     socket.emit('message read', { 
-                        roomName: currentRoom, 
-                        lastMessageId: msg.id, 
-                        recipient: msg.sender 
-                    });
-                 }
-            }
-        });
-        
-        socket.on('update statuses', (statuses) => {
-            allUsers.forEach(username => {
-                const isOnline = statuses[username];
-                const statusText = isOnline ? 'Online' : 'Offline';
-                const statusClass = isOnline ? 'status-online' : 'status-offline';
-
-                const contactItem = document.querySelector(`.contact-item[data-username="${username}"]`);
-                if (contactItem) {
-                    const statusSpan = document.getElementById(`status-${username}`);
-                    if (statusSpan) {
-                        statusSpan.textContent = statusText;
-                        statusSpan.className = `contact-status-text ${statusClass}`;
-                    }
-                }
-
-                if (username === currentRecipient) {
-                    const isTypingVisible = typingIndicator.textContent.includes('печатает');
-                    if (!isTypingVisible) {
-                         typingIndicator.textContent = statusText;
-                         typingIndicator.className = statusClass; 
-                    }
-                }
+                openContextMenu(e.clientX, e.clientY, msg.id, msg.text);
             });
-        });
-
-        socket.on('typing', ({ sender, isTyping }) => {
-            if (sender === currentRecipient) {
-                const currentStatusElement = document.getElementById(`status-${sender}`);
-                const defaultText = currentStatusElement ? currentStatusElement.textContent : 'Offline';
-                const defaultClass = currentStatusElement ? currentStatusElement.className : 'status-offline-text';
-                
-                if (isTyping) {
-                    typingIndicator.textContent = `${sender} печатает...`;
-                    typingIndicator.className = 'status-online-text'; 
-                } else {
-                    typingIndicator.textContent = defaultText;
-                    typingIndicator.className = defaultClass;
-                }
-            }
-        });
+        }
         
-        socket.on('history loaded', (history) => {
-            displayHistory(history);
-        });
+        messageContainer.appendChild(bubble);
 
-        socket.on('read status updated', ({ room, lastReadId }) => {
-            if (room === currentRoom) {
-                const myMessages = messagesContainer.querySelectorAll(`.message-content-wrapper.sent`);
-                myMessages.forEach(wrapper => {
-                    const messageId = parseInt(wrapper.getAttribute('data-id'));
-                    if (messageId <= lastReadId) {
-                        const readReceipt = wrapper.querySelector('.read-receipt');
-                        if (readReceipt && !readReceipt.classList.contains('is-read')) {
-                             readReceipt.classList.add('is-read');
-                        }
+        // Создание аватара для моих сообщений (чтобы отступы были одинаковыми)
+        if (isMyMessage) {
+             const avatar = document.createElement('img');
+             avatar.className = 'message-avatar';
+             avatar.src = currentUserAvatar;
+             avatar.style.visibility = 'hidden'; // Скрываем, чтобы сохранить место
+             messageContainer.appendChild(avatar);
+        }
+        
+        return messageContainer;
+    }
+
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Обновление счетчика в сайдбаре
+    function updateUnreadCount(username, count) {
+        const item = document.querySelector(`.user-item[data-username="${username}"]`);
+        if (!item) return;
+
+        let counter = item.querySelector('.unread-count');
+        
+        if (count > 0) {
+            if (!counter) {
+                counter = document.createElement('span');
+                counter.className = 'unread-count';
+                item.appendChild(counter);
+            }
+            counter.textContent = count > 99 ? '99+' : count;
+            unreadCounts[username] = count;
+        } else {
+            if (counter) {
+                item.removeChild(counter);
+            }
+            delete unreadCounts[username];
+        }
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Увеличение счетчика для получателя
+    function incrementUnreadCount(recipient) {
+        // Увеличиваем счетчик только если получатель не в текущей активной комнате
+        if (currentRecipient !== recipient) {
+            const currentCount = unreadCounts[recipient] || 0;
+            updateUnreadCount(recipient, currentCount + 1);
+        }
+    }
+
+    // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
+
+    // 1. АВТОРИЗАЦИЯ
+    loginForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        
+        socket.emit('login', username, password, (success, data) => {
+            if (success) {
+                currentUser = data.currentUser;
+                currentUserAvatar = data.currentUserAvatar;
+                allUsersAvatars = data.allUsersAvatars;
+                
+                loginFormContainer.style.display = 'none';
+                chatContainer.style.display = 'flex';
+                
+                document.getElementById('my-username').textContent = currentUser;
+                document.getElementById('my-avatar').src = currentUserAvatar;
+
+                // Загрузка списка пользователей
+                data.allUsers.forEach(username => {
+                    if (username !== currentUser) {
+                        const item = document.createElement('div');
+                        item.className = 'user-item';
+                        item.dataset.username = username;
+                        item.innerHTML = `
+                            <img class="user-avatar" src="${allUsersAvatars[username]}" alt="${username}">
+                            <span class="user-name">${username}</span>
+                            <span class="status-dot ${data.initialStatuses[username] ? 'status-online' : ''}" data-status-for="${username}"></span>
+                        `;
+                        item.addEventListener('click', () => joinRoom(username));
+                        usersContainer.appendChild(item);
                     }
                 });
-            }
-        });
-        
-        socket.on('message edited', ({ messageId, newText }) => {
-             const msgElement = document.querySelector(`.message-content-wrapper[data-id="${messageId}"]`);
-             if (msgElement) {
-                 const textSpan = msgElement.querySelector('.message-text');
-                 const timeStatus = msgElement.querySelector('.message-time-status');
-                 if (textSpan) {
-                     textSpan.textContent = newText;
-                 }
-                 if (timeStatus && !timeStatus.querySelector('.message-edited')) {
-                      timeStatus.innerHTML = '<span class="message-edited">(ред.)</span>' + timeStatus.innerHTML;
-                 }
-             }
-        });
+                
+                // Адаптивность для мобильных
+                if (window.innerWidth <= 768) {
+                    document.getElementById('toggle-sidebar').style.display = 'block';
+                }
 
-        socket.on('message deleted', ({ messageId }) => {
-             const wrapper = document.querySelector(`.message-content-wrapper[data-id="${messageId}"]`);
-             if(wrapper) wrapper.remove();
-        });
-        
-        socket.on('search results', (results) => {
-            messagesContainer.innerHTML = '<h2>Результаты поиска:</h2>';
-            if (results.length === 0) {
-                 messagesContainer.innerHTML += '<p>Сообщений не найдено.</p>';
-                 return;
+            } else {
+                document.getElementById('login-error').textContent = data;
             }
-            results.forEach(msg => {
-                const resultElement = document.createElement('div');
-                resultElement.className = 'search-result-message';
-                resultElement.innerHTML = `
-                    <strong>${msg.sender} (${formatTimestamp(msg.timestamp)})</strong>: 
-                    <span>${msg.text}</span>
-                `;
-                messagesContainer.appendChild(resultElement);
+        });
+    });
+
+    // 2. ВХОД В КОМНАТУ
+    async function joinRoom(username) {
+        if (currentRecipient === username) return;
+
+        // Снимаем активность с предыдущей комнаты
+        document.querySelectorAll('.user-item').forEach(item => item.classList.remove('active'));
+
+        currentRecipient = username;
+        currentRoom = createRoomName(currentUser, currentRecipient);
+        
+        // Устанавливаем активность на новую комнату
+        const currentItem = document.querySelector(`.user-item[data-username="${username}"]`);
+        if (currentItem) {
+            currentItem.classList.add('active');
+        }
+        
+        // Обновляем шапку
+        document.getElementById('recipient-name').textContent = username;
+        document.getElementById('recipient-avatar').src = allUsersAvatars[username];
+        chatMessages.innerHTML = ''; // Очистка старых сообщений
+        typingIndicator.textContent = ''; // Очистка индикатора печати
+
+        // Убираем счетчик непрочитанных, так как мы заходим в комнату
+        updateUnreadCount(username, 0);
+
+        socket.emit('join room', currentRoom);
+
+        // Скрываем сайдбар на мобильном
+        if (window.innerWidth <= 768) {
+             document.getElementById('user-list').classList.remove('visible');
+        }
+    }
+
+    // 3. ОТПРАВКА ТЕКСТА
+    sendButton.addEventListener('click', () => sendMessage());
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+        socket.emit('typing', { recipient: currentRecipient, isTyping: true });
+        clearTimeout(isTypingTimeout);
+        isTypingTimeout = setTimeout(() => {
+            socket.emit('typing', { recipient: currentRecipient, isTyping: false });
+        }, 3000);
+    });
+
+    function sendMessage() {
+        if (!currentRecipient || !messageInput.value.trim()) return;
+
+        const text = messageInput.value.trim();
+        socket.emit('private message', { recipient: currentRecipient, text: text });
+        
+        messageInput.value = ''; // Очистка поля
+        socket.emit('typing', { recipient: currentRecipient, isTyping: false }); // Сброс индикатора
+    }
+    
+    // 4. ОТПРАВКА ФАЙЛА (ИСПРАВЛЕНО ДЛЯ ГАЛЕРЕИ)
+    fileButton.addEventListener('click', () => {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file || !currentRecipient) return;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const fileData = event.target.result;
+            let fileType = file.type.startsWith('image') ? 'image' : 
+                           file.type.startsWith('video') ? 'video' : 
+                           file.type.startsWith('audio') ? 'audio' : 'file';
+
+            socket.emit('file upload', {
+                recipient: currentRecipient,
+                filename: file.name,
+                data: fileData,
+                type: fileType
             });
-            messagesContainer.scrollTop = 0;
+        };
+        reader.readAsDataURL(file);
+        fileInput.value = ''; // Сброс поля ввода файла
+    });
+    
+    // 5. НОВОЕ: ОТПРАВКА ГОЛОСОВОГО СООБЩЕНИЯ
+    voiceRecordBtn.addEventListener('click', () => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
+
+    function startRecording() {
+        if (!currentRecipient) return;
+        
+        navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+                
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    // Создаем Blob из всех частей
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/mp3' });
+                    
+                    // Читаем Blob как Data URL
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        socket.emit('file upload', {
+                            recipient: currentRecipient,
+                            filename: `voice_${Date.now()}.mp3`,
+                            data: event.target.result, // Data URL
+                            type: 'voice' // Специальный тип для голосовых
+                        });
+                    };
+                    reader.readAsDataURL(audioBlob);
+                    
+                    // Закрываем поток (освобождаем микрофон)
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                voiceRecordBtn.textContent = '⏹️'; // Изменить иконку на Стоп
+                voiceRecordBtn.style.backgroundColor = 'red';
+                console.log('Начата запись голоса...');
+            })
+            .catch(err => {
+                console.error('Ошибка доступа к микрофону:', err);
+                alert('Не удалось получить доступ к микрофону.');
+            });
+    }
+
+    function stopRecording() {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            isRecording = false;
+            voiceRecordBtn.textContent = '🎙️'; // Вернуть иконку
+            voiceRecordBtn.style.backgroundColor = '#007bff';
+            console.log('Запись голоса остановлена.');
+        }
+    }
+    
+    // 6. РЕДАКТИРОВАНИЕ/УДАЛЕНИЕ
+    function openContextMenu(x, y, messageId, currentText) {
+        // Простая реализация контекстного меню (можно улучшить)
+        const menu = document.createElement('div');
+        menu.style.position = 'absolute';
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        menu.style.zIndex = '101';
+        menu.style.background = 'white';
+        menu.style.border = '1px solid #ccc';
+        menu.style.borderRadius = '5px';
+        menu.style.boxShadow = '2px 2px 5px rgba(0,0,0,0.2)';
+        
+        const editItem = document.createElement('div');
+        editItem.textContent = 'Редактировать';
+        editItem.style.padding = '8px';
+        editItem.style.cursor = 'pointer';
+        editItem.onmouseover = () => editItem.style.backgroundColor = '#f0f0f0';
+        editItem.onmouseout = () => editItem.style.backgroundColor = 'white';
+        editItem.onclick = () => {
+            editingMessageId = messageId;
+            editMessageInput.value = currentText;
+            editModal.style.display = 'flex';
+            document.body.removeChild(menu);
+        };
+
+        const deleteItem = document.createElement('div');
+        deleteItem.textContent = 'Удалить';
+        deleteItem.style.padding = '8px';
+        deleteItem.style.cursor = 'pointer';
+        deleteItem.onmouseover = () => deleteItem.style.backgroundColor = '#f0f0f0';
+        deleteItem.onmouseout = () => deleteItem.style.backgroundColor = 'white';
+        deleteItem.onclick = () => {
+            if(confirm('Точно удалить сообщение?')) {
+                socket.emit('delete message', { messageId });
+                document.body.removeChild(menu);
+            }
+        };
+
+        menu.appendChild(editItem);
+        menu.appendChild(deleteItem);
+        document.body.appendChild(menu);
+
+        document.addEventListener('click', function closeMenu() {
+            if(document.body.contains(menu)) {
+                document.body.removeChild(menu);
+            }
+            document.removeEventListener('click', closeMenu);
+        }, { once: true });
+    }
+
+    saveEditBtn.addEventListener('click', () => {
+        if (editingMessageId && editMessageInput.value.trim()) {
+            socket.emit('edit message', { messageId: editingMessageId, newText: editMessageInput.value.trim(), recipient: currentRecipient });
+            editModal.style.display = 'none';
+            editingMessageId = null;
+        }
+    });
+
+    cancelEditBtn.addEventListener('click', () => {
+        editModal.style.display = 'none';
+        editingMessageId = null;
+    });
+
+    // 7. МОБИЛЬНАЯ АДАПТИВНОСТЬ
+    document.getElementById('toggle-sidebar').addEventListener('click', () => {
+        document.getElementById('user-list').classList.toggle('visible');
+    });
+
+    // --- SOCKET.IO ОБРАБОТЧИКИ ---
+
+    // 1. ПРИЕМ НОВОГО СООБЩЕНИЯ
+    socket.on('private message', (msg) => {
+        // Проверяем, в текущей ли мы комнате
+        if (msg.room === currentRoom) {
+            const messageElement = renderMessage(msg, currentUser);
+            chatMessages.appendChild(messageElement);
+            scrollToBottom();
+            
+            // Если сообщение чужое, отправляем статус "прочитано"
+            if (msg.sender !== currentUser) {
+                // Отправляем read receipt, если мы в активной комнате
+                socket.emit('message read', { roomName: currentRoom, lastMessageId: msg.id, recipient: msg.sender });
+                
+            }
+        } else {
+            // НОВОЕ: Если сообщение пришло в другую комнату, увеличиваем счетчик
+            const otherUser = msg.room.split('-').find(name => name !== currentUser);
+            if (otherUser) {
+                incrementUnreadCount(otherUser);
+            }
+        }
+    });
+
+    // 2. ЗАГРУЗКА ИСТОРИИ (обновляем логику прочтения)
+    socket.on('history loaded', (history) => {
+        chatMessages.innerHTML = '';
+        history.forEach(msg => {
+            const messageElement = renderMessage(msg, currentUser);
+            chatMessages.appendChild(messageElement);
         });
+        scrollToBottom();
+        
+        // НОВОЕ: Отправка статуса прочтения после загрузки, если есть сообщения
+        if (history.length > 0) {
+            const lastMessageId = history[history.length - 1].id;
+            const recipient = currentRoom.split('-').find(name => name !== currentUser);
 
-        socket.on('avatar updated', (newAvatars) => {
-             allUsersAvatars = newAvatars;
-             if (currentUsername) {
-                 const initialStatuses = allUsers.reduce((acc, name) => {
-                    const statusSpan = document.getElementById(`status-${name}`);
-                    acc[name] = statusSpan ? statusSpan.className.includes('online') : false;
-                    return acc;
-                }, {});
-                renderContactList(initialStatuses);
-             }
+            // Отправляем read receipt, чтобы обновить счетчик на стороне отправителя
+            socket.emit('message read', { roomName: currentRoom, lastMessageId: lastMessageId, recipient: recipient });
+        }
+    });
+
+    // 3. ОБНОВЛЕНИЕ СТАТУСА ОНЛАЙН/ОФЛАЙН
+    socket.on('update statuses', (statuses) => {
+        for (const username in statuses) {
+            const dot = document.querySelector(`.status-dot[data-status-for="${username}"]`);
+            if (dot) {
+                dot.classList.toggle('status-online', statuses[username]);
+            }
+        }
+    });
+
+    // 4. ИНДИКАТОР ПЕЧАТИ
+    socket.on('typing', ({ sender, isTyping }) => {
+        if (sender === currentRecipient) {
+            typingIndicator.textContent = isTyping ? `${sender} печатает...` : '';
+            if (isTyping) scrollToBottom(); // Прокрутка вниз при начале печати
+        }
+    });
+
+    // 5. ОБНОВЛЕНИЕ СТАТУСА ПРОЧТЕНИЯ
+    socket.on('read status updated', ({ room, lastReadId }) => {
+        if (room === currentRoom) {
+            // Обновляем все мои сообщения, которые теперь считаются прочитанными
+            document.querySelectorAll('.my-message-container').forEach(container => {
+                const messageId = parseInt(container.dataset.messageId);
+                if (messageId <= lastReadId) {
+                    const statusIcon = container.querySelector('.read-status-icon');
+                    if (statusIcon) {
+                        statusIcon.innerHTML = '✓✓'; // Две галочки
+                    }
+                }
+            });
+        }
+    });
+
+    // 6. ОБНОВЛЕНИЕ РЕДАКТИРОВАНИЯ/УДАЛЕНИЯ
+    socket.on('message edited', ({ messageId, newText }) => {
+        const messageContainer = document.querySelector(`[data-message-id="${messageId}"] .message-text`);
+        if (messageContainer) {
+            messageContainer.textContent = newText + ' (ред.)';
+        }
+    });
+
+    socket.on('message deleted', ({ messageId }) => {
+        const messageContainer = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageContainer) {
+            messageContainer.querySelector('.message-bubble').innerHTML = 'Сообщение удалено.';
+            // messageContainer.remove(); // Или можно полностью удалить элемент
+        }
+    });
+
+    // 7. ОБНОВЛЕНИЕ АВАТАРОВ
+    socket.on('avatar updated', (newAvatars) => {
+        allUsersAvatars = newAvatars;
+        
+        // Обновляем все элементы на странице
+        document.querySelectorAll('.user-avatar').forEach(img => {
+            const username = img.alt || img.getAttribute('data-status-for'); 
+            if (newAvatars[username]) {
+                img.src = newAvatars[username];
+            }
         });
+    });
 
-        // --- ИНИЦИАЛИЗАЦИЯ ---
-        document.addEventListener('DOMContentLoaded', initTheme);
-
-    </script>
+</script>
 </body>
 </html>

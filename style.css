@@ -1,0 +1,486 @@
+/* --- style.css: ФИНАЛЬНЫЙ КОД С ГАРАНТИРОВАННОЙ СТРУКТУРОЙ И ТЕМАМИ --- */
+
+/* --- CSS Переменные для Темы --- */
+:root {
+    /* Светлая тема по умолчанию */
+    --main-bg: #f5f7fa;
+    --sidebar-bg: #ffffff;
+    --chat-bg: #e5eff5;
+    --text-color: #333333;
+    --input-bg: #ffffff;
+    --input-border: #cccccc;
+    --sent-bubble-bg: #3f90ff; /* Синий для отправленных */
+    --sent-text-color: #ffffff;
+    --received-bubble-bg: #ffffff; /* Белый для полученных */
+    --received-text-color: #333333;
+    --status-online-text-color: #4caf50; 
+    --status-offline-text-color: #aaaaaa; 
+    --unread-badge-bg: #ff4141; 
+    --active-contact-bg: #e0e0e0;
+    --hover-bg: #f0f0f0;
+    --highlight-bg: #ffeb3b; /* Желтый для поиска */
+    --modal-bg: #ffffff;
+    --read-receipt-color: #9aa9a9; 
+    --read-receipt-read-color: #3f90ff; 
+    --icon-color: #6c757d;
+}
+
+/* Темная тема */
+body.dark-mode {
+    --main-bg: #1c2e36;
+    --sidebar-bg: #111b21;
+    --chat-bg: #0b141a;
+    --text-color: #e9edef;
+    --input-bg: #2a3942;
+    --input-border: #444;
+    --sent-bubble-bg: #056162; /* Темно-зеленый для отправленных */
+    --sent-text-color: #e9edef;
+    --received-bubble-bg: #2a3942; /* Темно-серый для полученных */
+    --received-text-color: #e9edef;
+    --status-online-text-color: #66BB6A;
+    --status-offline-text-color: #777777;
+    --unread-badge-bg: #ff4141;
+    --active-contact-bg: #202c33;
+    --hover-bg: #1b2831;
+    --highlight-bg: #8c8c00; 
+    --modal-bg: #1f2a33;
+    --read-receipt-color: #9aa9a9;
+    --read-receipt-read-color: #55acef; /* Голубой для прочтения */
+    --icon-color: #e9edef;
+}
+
+/* --- ОСНОВНАЯ СТРУКТУРА (Гарантия размещения) --- */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    display: flex; 
+    height: 100vh; 
+    background-color: var(--main-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s;
+    overflow: hidden; 
+}
+
+.screen {
+    width: 100%;
+    height: 100%;
+    display: none;
+}
+
+.screen.active {
+    display: flex; 
+}
+
+/* --- ЭКРАН ВХОДА --- */
+#login-screen {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.login-form {
+    background-color: var(--sidebar-bg);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 350px;
+}
+input, button {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid var(--input-border);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+}
+button {
+    cursor: pointer;
+    background-color: var(--sent-bubble-bg);
+    color: var(--sent-text-color);
+    font-weight: bold;
+}
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+.error-message {
+    color: var(--unread-badge-bg);
+    font-size: 0.9em;
+}
+
+
+/* --- ЭКРАН ЧАТА И САЙДБАР --- */
+#chat-screen {
+    display: flex; 
+    width: 100%;
+}
+
+#sidebar {
+    width: 350px; 
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--input-border);
+    flex-shrink: 0;
+}
+
+#main-chat {
+    flex-grow: 1; 
+    display: flex;
+    flex-direction: column;
+    background-color: var(--chat-bg);
+    position: relative;
+}
+
+#user-info {
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--input-border);
+    flex-shrink: 0;
+}
+
+#user-info #theme-toggle, #user-info #profile-settings-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5em;
+    color: var(--icon-color);
+    margin-left: 5px;
+    opacity: 0.8;
+}
+#user-info #theme-toggle {
+     margin-left: auto;
+}
+
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* --- КОНТАКТЫ --- */
+#contact-list {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+#contact-list h2 {
+    font-size: 1.1em;
+    padding: 10px 15px;
+    color: var(--text-color);
+    border-bottom: 1px solid var(--input-border);
+    font-weight: 500;
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--input-border);
+    transition: background-color 0.1s;
+    justify-content: space-between;
+}
+.contact-item:hover {
+    background-color: var(--hover-bg);
+}
+.contact-item.active {
+    background-color: var(--active-contact-bg);
+}
+.contact-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 1;
+}
+.contact-status-text {
+    font-size: 0.8em;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.status-online-text {
+    color: var(--status-online-text-color);
+}
+.status-offline-text {
+    color: var(--status-offline-text-color);
+}
+.unread-badge {
+    background-color: var(--unread-badge-bg);
+    color: white;
+    font-size: 0.7em;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
+/* --- ЗАГОЛОВОК ЧАТА И ПОИСК --- */
+#chat-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: var(--sidebar-bg);
+    border-bottom: 1px solid var(--input-border);
+    flex-shrink: 0;
+}
+.header-name-status {
+    display: flex;
+    flex-direction: column;
+    margin-right: auto;
+    margin-left: 10px;
+}
+#recipient-name {
+    font-weight: bold;
+}
+.search-area {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: 20px;
+}
+#search-input {
+    padding: 8px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    width: 150px;
+    transition: width 0.3s;
+}
+#search-input:focus {
+    width: 200px;
+}
+#search-button {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    font-size: 1.2em;
+    padding: 5px;
+}
+
+/* --- КОНТЕЙНЕР СООБЩЕНИЙ --- */
+#messages-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background-color: var(--chat-bg);
+}
+.search-result-message {
+    background-color: var(--highlight-bg) !important;
+    border: 1px solid orange;
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+}
+.message-content-wrapper {
+    display: flex;
+    align-items: flex-end; 
+    gap: 8px;
+    max-width: 80%;
+    position: relative;
+}
+.message-content-wrapper.sent {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+}
+.message-content-wrapper.received {
+    align-self: flex-start;
+}
+.message-text-bubble {
+    padding: 10px 12px;
+    border-radius: 10px;
+    word-wrap: break-word;
+    box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+    position: relative;
+    max-width: 100%;
+}
+.sent .message-text-bubble {
+    background-color: var(--sent-bubble-bg);
+    color: var(--sent-text-color);
+    border-bottom-right-radius: 2px;
+}
+.received .message-text-bubble {
+    background-color: var(--received-bubble-bg);
+    color: var(--received-text-color);
+    border-bottom-left-radius: 2px;
+}
+.message-time-status {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 0.7em;
+    margin-top: 5px;
+    opacity: 0.7;
+    gap: 5px;
+}
+.read-receipt {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: var(--read-receipt-color); 
+}
+.read-receipt.is-read {
+    color: var(--read-receipt-read-color); 
+}
+.message-edited {
+    font-style: italic;
+    font-size: 0.8em;
+    opacity: 0.8;
+    margin-left: 4px;
+}
+/* Голосовые сообщения */
+.voice-message-bubble audio {
+    width: 100%;
+    height: 30px;
+    min-width: 150px;
+}
+/* Меню редактирования/удаления */
+.message-text-bubble:hover .message-menu,
+.message-menu:hover {
+    opacity: 1;
+}
+.message-menu {
+    position: absolute;
+    top: -15px;
+    right: 5px;
+    background: var(--sidebar-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 5px;
+    display: flex;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.message-menu button {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    font-size: 0.8em;
+    padding: 3px 6px;
+    cursor: pointer;
+    font-weight: normal;
+}
+.message-menu button:hover {
+    background: var(--hover-bg);
+}
+
+
+/* --- ОБЛАСТЬ ВВОДА СООБЩЕНИЙ --- */
+#message-input-area {
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid var(--input-border);
+    flex-shrink: 0;
+    background-color: var(--sidebar-bg);
+}
+
+#file-label, #record-button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.5em;
+    color: var(--icon-color);
+    padding: 5px;
+}
+#message-input {
+    flex-grow: 1;
+    margin: 0 10px;
+    padding: 10px 15px;
+    border-radius: 20px;
+}
+#send-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    font-size: 0.9em;
+    flex-shrink: 0;
+    color: white;
+}
+#send-button:disabled {
+    background-color: var(--input-border);
+}
+
+
+/* --- МОДАЛЬНОЕ ОКНО ПРОФИЛЯ --- */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 100; 
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%; 
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.4); 
+    padding-top: 60px;
+}
+.modal.is-open {
+     display: block; 
+}
+.modal-content {
+    background-color: var(--modal-bg);
+    margin: 5% auto;
+    padding: 30px;
+    border-radius: 10px;
+    width: 90%; 
+    max-width: 400px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    color: var(--text-color);
+}
+.close-button {
+    color: var(--text-color);
+    align-self: flex-end;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.avatar-large {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    margin-bottom: 10px;
+    border: 3px solid var(--sent-bubble-bg);
+}
+#change-avatar-button, #save-profile-button {
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    border: none;
+    width: 100%;
+}
+#change-avatar-button {
+    background-color: var(--hover-bg);
+    color: var(--text-color);
+}
+.button-like {
+    text-align: center;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    border: none;
+    width: 100%;
+}

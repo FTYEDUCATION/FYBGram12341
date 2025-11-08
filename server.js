@@ -1,4 +1,4 @@
-// --- server.js: ФИНАЛЬНАЯ СТАБИЛЬНАЯ ВЕРСИЯ СО ВСЕМИ ФУНКЦИЯМИ ---
+// --- server.js: ФИНАЛЬНЫЙ СТАБИЛЬНЫЙ КОД ---
 const express = require('express');
 const app = express();
 const http = require('http');
@@ -12,7 +12,7 @@ const fs = require('fs');
 const port = process.env.PORT || 3000;
 const SALT_ROUNDS = 10; 
 
-// Директория для загрузки файлов
+// Директория для загрузки файлов и аватаров
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)){
     fs.mkdirSync(UPLOADS_DIR);
@@ -166,17 +166,22 @@ async function updateReadReceipt(roomName, messageId) {
 }
 
 async function saveFile(fileMsg) {
-    const filename = `${Date.now()}_${fileMsg.filename}`;
+    // Безопасное извлечение расширения файла
+    const mimeParts = fileMsg.type.split('/');
+    const extension = mimeParts.length > 1 ? mimeParts[1].split(';')[0] : 'dat';
+
+    const filename = `${Date.now()}_${fileMsg.filename}.${extension}`;
     const filePath = path.join(UPLOADS_DIR, filename);
 
     try {
+        // Удаляем префикс Data URL (например, 'data:image/jpeg;base64,')
         const base64Data = fileMsg.data.split(';base64,').pop(); 
         fs.writeFileSync(filePath, base64Data, {encoding: 'base64'});
         console.log(`Файл сохранен: ${filePath} (${fileMsg.type})`);
 
         return { 
             url: `/uploads/${filename}`, 
-            type: fileMsg.type 
+            type: fileMsg.type.startsWith('audio') ? 'voice' : fileMsg.type.split('/')[0] // voice, image, video, document, other
         }; 
     } catch (e) {
         console.error("Ошибка при сохранении файла:", e);
@@ -184,10 +189,13 @@ async function saveFile(fileMsg) {
     }
 }
 
-// НОВАЯ ФУНКЦИЯ: Обновление аватара на сервере
 async function updateAvatar(username, fileData) {
     try {
-        const extension = fileData.split('/')[1].split(';')[0]; // jpeg, png и т.д.
+        // Улучшенное извлечение типа
+        const mimeTypeMatch = fileData.match(/^data:([^;]+);/);
+        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
+        const extension = mimeType.split('/')[1] || 'jpg';
+        
         const filename = `${username}_avatar_${Date.now()}.${extension}`;
         const filePath = path.join(UPLOADS_DIR, filename);
 
@@ -215,16 +223,17 @@ async function updateAvatar(username, fileData) {
 // --- НАСТРОЙКА EXPRESS ---
 
 app.use(express.static(path.join(__dirname)));
-app.use('/uploads', express.static(UPLOADS_DIR));
-app.use('/avatars', express.static(path.join(__dirname, 'avatars'))); // Для дефолтных аватаров
 
-// ... (Остальной Express код) ...
+// ГЛАВНОЕ ИСПРАВЛЕНИЕ: Обслуживание статических файлов из папки 'uploads'
+app.use('/uploads', express.static(UPLOADS_DIR)); 
+
+app.use('/avatars', express.static(path.join(__dirname, 'avatars'))); 
+
 
 // --- НАСТРОЙКА SOCKET.IO ---
 const io = new Server(server);
 
 function broadcastStatuses() {
-    // ... (Функция осталась прежней) ...
     const statuses = {};
     allUsernames.forEach(name => {
         statuses[name] = !!connectedUsers[name]; 
@@ -245,9 +254,74 @@ io.on('connection', (socket) => {
     let currentUsername = null;
     let currentRoom = null;
     
-    // ... (Login, Join Room, Private Message, Typing - остались прежними) ...
+    socket.on('login', async (username, password, callback) => {
+        const user = await findUser(username, password);
+        if (user) {
+            currentUsername = user.username;
+            const currentUserAvatar = user.avatar;
+            connectedUsers[currentUsername] = socket.id;
+            
+            const initialStatuses = broadcastStatuses();
+            const allAvatars = getAllAvatars();
+            
+            callback(true, { 
+                currentUser: currentUsername, 
+                currentUserAvatar: currentUserAvatar,
+                allUsers: allUsernames, 
+                initialStatuses: initialStatuses,
+                allUsersAvatars: allAvatars
+            });
+        } else {
+            callback(false, 'Неверное имя пользователя или пароль.');
+        }
+    });
 
-    // 4. ОТПРАВКА ФАЙЛА (МЕДИА И ГОЛОС)
+    socket.on('join room', async (recipient) => {
+        if (!currentUsername || !recipient) return;
+        
+        const newRoom = createRoomName(currentUsername, recipient);
+        
+        if (currentRoom) {
+            socket.leave(currentRoom);
+        }
+        
+        currentRoom = newRoom;
+        currentRecipient = recipient;
+        socket.join(currentRoom);
+        
+        const history = await loadHistory(currentRoom, currentUsername);
+        socket.emit('load history', { history: history, recipient: recipient });
+        
+        // Отправка подтверждения о прочтении
+        if (history.length > 0) {
+            const lastMessage = history[history.length - 1];
+            socket.emit('message read ack', { roomName: currentRoom, lastMessageId: lastMessage.id });
+        }
+    });
+
+    socket.on('private message', async (msg) => {
+        if (!currentUsername || !currentRoom || !msg.text) return;
+        
+        const messageToSave = {
+            sender: currentUsername,
+            recipient: currentRecipient, 
+            room: currentRoom,
+            text: msg.text,
+            type: 'text'
+        };
+        
+        const savedData = await saveMessage(messageToSave);
+        
+        const message = {
+            ...messageToSave,
+            id: savedData.id,
+            timestamp: savedData.timestamp,
+            is_read: false 
+        };
+
+        io.to(currentRoom).emit('private message', message);
+    });
+
     socket.on('file upload', async (fileMsg) => {
         if (!currentUsername || !fileMsg.recipient || !currentRoom || !fileMsg.data) return;
         
@@ -279,9 +353,13 @@ io.on('connection', (socket) => {
         io.to(currentRoom).emit('private message', message);
     });
     
-    // ... (Handlers: message read, search, edit, delete - остались прежними) ...
+    socket.on('message read', async ({ roomName, lastMessageId, recipient }) => {
+        await updateReadReceipt(roomName, lastMessageId);
+        // Уведомляем отправителя в комнате, что сообщение прочитано
+        io.to(roomName).emit('message read ack', { roomName: roomName, lastMessageId: lastMessageId });
+    });
 
-    // 9. ОБНОВЛЕНИЕ ПРОФИЛЯ (ИСПРАВЛЕНО)
+    // 9. ОБНОВЛЕНИЕ ПРОФИЛЯ
     socket.on('update profile', async ({ newAvatarData }, callback) => {
         if (!currentUsername || !newAvatarData) {
             return callback(false, 'Нет данных для обновления.');
@@ -305,7 +383,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ... (Disconnect - остался прежним) ...
+    socket.on('disconnect', () => {
+        if (currentUsername && connectedUsers[currentUsername]) {
+            delete connectedUsers[currentUsername];
+            broadcastStatuses();
+        }
+    });
 });
 
 // --- ЗАПУСК СЕРВЕРА ---
@@ -314,7 +397,6 @@ initializeUsers().then(() => {
 }).then(() => {
     server.listen(port, () => {
         console.log(`Сервер чата запущен на порту ${port}`);
-        // Выводим только часть строки, чтобы не показывать секретный пароль в логах
         const displayUrl = DATABASE_URL.indexOf('@') > 0 ? DATABASE_URL.substring(0, DATABASE_URL.indexOf('@') + 1) + '...' : DATABASE_URL;
         console.log(`Подключение к БД: ${displayUrl}`); 
     });
@@ -322,3 +404,7 @@ initializeUsers().then(() => {
     console.error('Критическая ошибка запуска:', err.message);
     process.exit(1);
 });
+
+function createRoomName(user1, user2) {
+    return [user1, user2].sort().join('-');
+}

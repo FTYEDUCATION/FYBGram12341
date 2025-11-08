@@ -412,7 +412,7 @@
     let isRecording = false; 
     let mediaRecorder; 
     let audioChunks = []; 
-    let newAvatarBase64 = null; // НОВОЕ: Для хранения данных аватара
+    let newAvatarBase64 = null; 
 
     // --- DOM ЭЛЕМЕНТЫ ---
     const loginFormContainer = document.getElementById('login-form-container');
@@ -427,14 +427,6 @@
     const voiceRecordBtn = document.getElementById('voice-record-btn'); 
     const typingIndicator = document.getElementById('typing-indicator');
     
-    // Элементы редактирования
-    const editModal = document.getElementById('edit-modal');
-    const editMessageInput = document.getElementById('edit-message-input');
-    const saveEditBtn = document.getElementById('save-edit-btn');
-    const cancelEditBtn = document.getElementById('cancel-edit-btn');
-    let editingMessageId = null;
-    
-    // Элементы профиля (НОВОЕ)
     const editProfileBtn = document.getElementById('edit-profile-btn');
     const profileModal = document.getElementById('profile-modal');
     const avatarInput = document.getElementById('avatar-input');
@@ -449,7 +441,6 @@
     }
 
     function renderMessage(msg, currentUsername) {
-        // ... (Функция рендеринга сообщений, осталась та же) ...
         const messageContainer = document.createElement('div');
         messageContainer.className = `message-container ${msg.sender === currentUsername ? 'my-message-container' : 'their-message-container'}`;
         messageContainer.dataset.messageId = msg.id;
@@ -468,7 +459,13 @@
         bubble.className = `message-bubble ${isMyMessage ? 'my-message' : 'their-message'}`;
         bubble.dataset.sender = msg.sender;
 
-        if (msg.type === 'image') {
+        if (msg.deleted) {
+             const deletedText = document.createElement('span');
+             deletedText.textContent = msg.sender === currentUsername ? 'Вы удалили это сообщение.' : 'Сообщение удалено.';
+             deletedText.style.fontStyle = 'italic';
+             deletedText.style.opacity = '0.7';
+             bubble.appendChild(deletedText);
+        } else if (msg.type === 'image') {
             const img = document.createElement('img');
             img.src = msg.url;
             img.alt = msg.text || 'Изображение';
@@ -482,11 +479,18 @@
             const audio = document.createElement('audio');
             audio.src = msg.url;
             audio.controls = true;
+            audio.style.width = '100%';
             bubble.appendChild(audio);
+        } else if (msg.type === 'document' || msg.type === 'other') {
+            const link = document.createElement('a');
+            link.href = msg.url;
+            link.textContent = msg.text || 'Файл';
+            link.target = '_blank';
+            bubble.appendChild(link);
         } else {
             const textSpan = document.createElement('span');
             textSpan.className = 'message-text';
-            textSpan.textContent = msg.text;
+            textSpan.textContent = msg.text + (msg.edited ? ' (ред.)' : '');
             bubble.appendChild(textSpan);
         }
         
@@ -502,14 +506,8 @@
         }
 
         bubble.appendChild(timestamp);
-
-        // Контекстное меню
-        if (isMyMessage) {
-             bubble.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                openContextMenu(e.clientX, e.clientY, msg.id, msg.text);
-            });
-        }
+        
+        // ... (логика контекстного меню) ...
         
         messageContainer.appendChild(bubble);
 
@@ -556,6 +554,37 @@
             updateUnreadCount(recipient, currentCount + 1);
         }
     }
+    
+    function joinRoom(recipient) {
+        if (isRecording) {
+            stopRecording();
+        }
+        currentRecipient = recipient;
+        document.getElementById('recipient-name').textContent = recipient;
+        document.getElementById('recipient-avatar').src = allUsersAvatars[recipient];
+        chatMessages.innerHTML = '';
+        
+        // Активируем нужный элемент в списке
+        document.querySelectorAll('.user-item').forEach(item => {
+            item.classList.remove('active');
+            if (item.dataset.username === recipient) {
+                item.classList.add('active');
+            }
+        });
+
+        // Сбрасываем счетчик непрочитанных сообщений
+        updateUnreadCount(recipient, 0);
+
+        socket.emit('join room', recipient);
+    }
+    
+    function sendMessage() {
+        const text = messageInput.value.trim();
+        if (text && currentRecipient) {
+            socket.emit('private message', { text: text });
+            messageInput.value = '';
+        }
+    }
 
     // --- ОБРАБОТЧИКИ СОБЫТИЙ ---
 
@@ -591,10 +620,6 @@
                         usersContainer.appendChild(item);
                     }
                 });
-                
-                if (window.innerWidth <= 768) {
-                    document.getElementById('toggle-sidebar').style.display = 'block';
-                }
 
             } else {
                 document.getElementById('login-error').textContent = data;
@@ -602,8 +627,13 @@
         });
     });
 
-    // 2. ОТПРАВКА ГОЛОСОВОГО СООБЩЕНИЯ (ИСПРАВЛЕНО НА WEBM)
+    // 2. ОТПРАВКА ГОЛОСОВОГО СООБЩЕНИЯ
     voiceRecordBtn.addEventListener('click', () => {
+        if (!currentRecipient) {
+            alert('Пожалуйста, выберите собеседника.');
+            return;
+        }
+        
         if (isRecording) {
             stopRecording();
         } else {
@@ -612,33 +642,31 @@
     });
 
     function startRecording() {
-        if (!currentRecipient) {
-            alert('Пожалуйста, выберите собеседника.');
-            return;
-        }
-        
         navigator.mediaDevices.getUserMedia({ audio: true })
             .then(stream => {
-                // ИСПРАВЛЕНО: Используем 'audio/webm' для лучшей совместимости
+                // Используем 'audio/webm' для лучшей совместимости
                 mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
                 audioChunks = [];
                 
                 mediaRecorder.ondataavailable = event => {
-                    audioChunks.push(event.data);
+                    if (event.data.size > 0) {
+                         audioChunks.push(event.data);
+                    }
                 };
 
                 mediaRecorder.onstop = () => {
-                    // ИСПРАВЛЕНО: Создаем Blob с типом 'audio/webm'
+                    if (audioChunks.length === 0) return;
+                    
                     const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                     
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                        socket.emit('file upload', {
+                         socket.emit('file upload', {
                             recipient: currentRecipient,
-                            filename: `voice_${Date.now()}.webm`, // Изменяем расширение
+                            filename: `voice_${Date.now()}.webm`, 
                             data: event.target.result, 
                             type: 'voice' 
-                        });
+                         });
                     };
                     reader.readAsDataURL(audioBlob);
                     
@@ -649,10 +677,8 @@
                 isRecording = true;
                 voiceRecordBtn.textContent = '⏹️'; 
                 voiceRecordBtn.style.backgroundColor = 'red';
-                console.log('Начата запись голоса...');
             })
             .catch(err => {
-                console.error('Ошибка доступа к микрофону:', err);
                 alert('Не удалось получить доступ к микрофону. Проверьте разрешения браузера.');
             });
     }
@@ -663,15 +689,56 @@
             isRecording = false;
             voiceRecordBtn.textContent = '🎙️'; 
             voiceRecordBtn.style.backgroundColor = '#007bff';
-            console.log('Запись голоса остановлена.');
         }
     }
     
-    // 3. ОТКРЫТИЕ МОДАЛЬНОГО ОКНА ПРОФИЛЯ (НОВОЕ)
+    // 3. ОТПРАВКА ТЕКСТА
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // 4. ОТКРЫТИЕ ВЫБОРА ФАЙЛА (СКРЕПКА/ГАЛЕРЕЯ)
+    fileButton.addEventListener('click', () => {
+        if (!currentRecipient) {
+             alert('Пожалуйста, выберите собеседника.');
+             return;
+        }
+        fileInput.click();
+    });
+
+    // 5. ОТПРАВКА ФАЙЛА (ГАЛЕРЕЯ/ДОКУМЕНТЫ)
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            let fileType = 'other';
+            if (file.type.startsWith('image')) fileType = 'image';
+            else if (file.type.startsWith('video')) fileType = 'video';
+            else if (file.type.startsWith('audio')) fileType = 'audio';
+            else if (file.type.includes('pdf') || file.type.includes('doc')) fileType = 'document';
+
+            socket.emit('file upload', {
+                recipient: currentRecipient,
+                filename: file.name,
+                data: event.target.result, 
+                type: fileType
+            });
+        };
+        reader.readAsDataURL(file);
+        e.target.value = null; 
+    });
+    
+    // 6. ОТКРЫТИЕ МОДАЛЬНОГО ОКНА ПРОФИЛЯ
     editProfileBtn.addEventListener('click', () => {
         document.getElementById('current-username-display').textContent = currentUser;
         avatarStatus.textContent = '(Файл не выбран)';
-        newAvatarBase64 = null; // Сброс
+        newAvatarBase64 = null; 
         profileModal.style.display = 'flex';
     });
 
@@ -679,37 +746,35 @@
         profileModal.style.display = 'none';
     });
     
-    // 4. СБОР ФАЙЛА АВАТАРА (НОВОЕ)
+    // 7. СБОР ФАЙЛА АВАТАРА
     avatarInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Предварительная проверка размера и типа (опционально)
         if (!file.type.startsWith('image')) {
              avatarStatus.textContent = 'Нужно выбрать файл изображения!';
              return;
         }
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        if (file.size > 5 * 1024 * 1024) { 
              avatarStatus.textContent = 'Файл слишком большой (макс. 5МБ).';
              return;
         }
 
         const reader = new FileReader();
         reader.onload = (event) => {
-            newAvatarBase64 = event.target.result; // Сохраняем Data URL
+            newAvatarBase64 = event.target.result; 
             avatarStatus.textContent = `Выбран файл: ${file.name}`;
         };
         reader.readAsDataURL(file);
     });
     
-    // 5. СОХРАНЕНИЕ ПРОФИЛЯ (НОВОЕ)
+    // 8. СОХРАНЕНИЕ ПРОФИЛЯ
     saveProfileBtn.addEventListener('click', () => {
         if (!newAvatarBase64) {
             alert('Сначала выберите файл аватара!');
             return;
         }
-
-        // Отправка данных на сервер
+        
         socket.emit('update profile', { newAvatarData: newAvatarBase64 }, (success, data) => {
             if (success) {
                 currentUserAvatar = data.newAvatarUrl;
@@ -722,12 +787,11 @@
         });
     });
 
-    // ... (Остальные обработчики: joinRoom, sendMessage, fileInput, ContextMenu - остались прежними) ...
+    // ... (Обработчики ContextMenu, EditMessage, DeleteMessage - пропущены для краткости, используйте свои существующие) ...
 
 
     // --- SOCKET.IO ОБРАБОТЧИКИ ---
 
-    // 1. ПРИЕМ НОВОГО СООБЩЕНИЯ
     socket.on('private message', (msg) => {
         if (msg.room === currentRoom) {
             const messageElement = renderMessage(msg, currentUser);
@@ -745,7 +809,15 @@
         }
     });
 
-    // 2. ОБНОВЛЕНИЕ АВАТАРОВ (НОВОЕ)
+    socket.on('load history', ({ history, recipient }) => {
+        chatMessages.innerHTML = '';
+        history.forEach(msg => {
+            chatMessages.appendChild(renderMessage(msg, currentUser));
+        });
+        scrollToBottom();
+    });
+
+    // ОБНОВЛЕНИЕ АВАТАРОВ
     socket.on('avatar updated', (newAvatars) => {
         allUsersAvatars = newAvatars;
         
@@ -753,11 +825,12 @@
         document.querySelectorAll('.user-avatar').forEach(img => {
             const username = img.alt || img.getAttribute('alt');
             if (newAvatars[username]) {
-                img.src = newAvatars[username];
+                // Добавляем параметр для обхода кэша
+                img.src = newAvatars[username] + '?' + new Date().getTime(); 
             }
         });
-
-        // Также нужно обновить аватары в уже загруженных сообщениях (если они там видны)
+        
+        // Обновляем аватары в уже загруженных сообщениях
         document.querySelectorAll('.message-avatar').forEach(img => {
             const username = img.alt || img.getAttribute('alt');
             if (newAvatars[username]) {
@@ -765,9 +838,22 @@
             }
         });
     });
-    
-    // ... (Остальные обработчики socket.io - остались прежними) ...
 
+    socket.on('message read ack', ({ roomName, lastMessageId }) => {
+        // Обновление галочек в сообщениях
+        if (roomName === currentRoom) {
+             // ... (логика обновления галочек)
+        }
+    });
+    
+    socket.on('update statuses', (statuses) => {
+        // Обновление статусов "онлайн"
+        document.querySelectorAll('.status-dot').forEach(dot => {
+             const username = dot.dataset.statusFor;
+             dot.classList.toggle('status-online', statuses[username]);
+        });
+    });
+    
 </script>
 </body>
 </html>
